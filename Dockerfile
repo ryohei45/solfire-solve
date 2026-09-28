@@ -14,21 +14,27 @@ RUN apt-get update && apt-get install -y \
     libudev-dev \
     bzip2
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+RUN curl --proto '=https' \
+    --tlsv1.2 \
+    -sSf \
+    https://sh.rustup.rs | sh -s -- -y
 
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-RUN mkdir -p /root/.local/share/solana/install/releases/1.8.14
+RUN mkdir -p \
+    /root/.local/share/solana/install/releases/1.8.14
 
 RUN curl -fL --retry 5 \
     https://github.com/solana-labs/solana/releases/download/v1.8.14/solana-release-x86_64-unknown-linux-gnu.tar.bz2 \
     -o /tmp/solana.tar.bz2
 
-RUN tar -xjf /tmp/solana.tar.bz2 \
+RUN tar -xjf \
+    /tmp/solana.tar.bz2 \
     -C /root/.local/share/solana/install/releases/1.8.14 \
     --strip-components=1
 
-RUN ln -s /root/.local/share/solana/install/releases/1.8.14 \
+RUN ln -s \
+    /root/.local/share/solana/install/releases/1.8.14 \
     /root/.local/share/solana/install/active_release
 
 ENV PATH="/root/.local/share/solana/install/active_release/bin:${PATH}"
