@@ -17,8 +17,14 @@ jobs:
       - name: Run build
         run: docker run --rm -v "$PWD:/work" solfire-solve
 
+      - name: Find solve.so
+        run: |
+          echo "Searching for solve.so..."
+          find . -name "solve.so" -type f -print
+
       - name: Upload solve.so
         uses: actions/upload-artifact@v4
         with:
           name: solve-so
-          path: dist/solve/solve.so
+          path: |
+            **/solve.so
