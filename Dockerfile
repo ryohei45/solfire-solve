@@ -14,6 +14,11 @@ RUN apt-get update && apt-get install -y \
     libudev-dev \
     bzip2
 
+# Install rustup
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Download Solana 1.8.14
 RUN mkdir -p /root/.local/share/solana/install/releases/1.8.14
 
 RUN curl -fL --retry 5 \
