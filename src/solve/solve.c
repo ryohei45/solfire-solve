@@ -1,3 +1,6 @@
+#pragma clang diagnostic ignored "-Wmacro-redefined"
+#pragma clang diagnostic ignored "-Wincompatible-pointer-types-discards-qualifiers"
+
 #include <solana_sdk.h>
 #include <stdint.h>
 #include <stddef.h>
